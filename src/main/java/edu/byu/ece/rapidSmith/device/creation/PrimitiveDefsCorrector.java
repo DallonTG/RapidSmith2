@@ -34,9 +34,28 @@ import static edu.byu.ece.rapidSmith.util.Exceptions.FileFormatException;
  *
  */
 public class PrimitiveDefsCorrector {
-	public static void makeCorrections(PrimitiveDefList defs, Document deviceInfo) {
+	public static void makeCorrections(PrimitiveDefList defs, Document familyInfo) {
 		for (PrimitiveDef def : defs) {
-			Element ptEl = getSiteTypeEl(deviceInfo, def.getType());
+			Element ptEl = null;
+			// Look for the site type in family info
+			Element siteTypesEl = familyInfo.getRootElement().getChild("site_types");
+			for (Element siteTypeEl : siteTypesEl.getChildren("site_type")) {
+				if (siteTypeEl.getChildText("name").equals(def.getType().name()))
+				{
+					// found it, break out of inner for loop
+					ptEl =  siteTypeEl;		
+					break;
+				}
+
+			}
+			
+			if (ptEl == null)
+			{
+				// didn't find it, continue main for loop
+				continue;
+			}
+			
+			//Element ptEl = getSiteTypeEl(familyInfo, def.getType());
 			Element correctionsEl = ptEl.getChild("corrections");
 			if (correctionsEl == null) // no corrections for this primitive type
 				continue;
@@ -205,8 +224,8 @@ public class PrimitiveDefsCorrector {
 
 	}
 
-	private static Element getSiteTypeEl(Document deviceInfo, SiteType type) {
-		Element siteTypesEl = deviceInfo.getRootElement().getChild("site_types");
+	private static Element getSiteTypeEl(Document familyInfo, SiteType type) {
+		Element siteTypesEl = familyInfo.getRootElement().getChild("site_types");
 		for (Element siteTypeEl : siteTypesEl.getChildren("site_type")) {
 			if (siteTypeEl.getChildText("name").equals(type.name()))
 				return siteTypeEl;

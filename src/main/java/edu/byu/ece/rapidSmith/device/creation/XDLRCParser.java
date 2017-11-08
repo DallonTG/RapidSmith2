@@ -169,21 +169,25 @@ public class XDLRCParser {
 		for (XDLRCParserListener listener : listeners)
 			listener.enterPrimitiveSite(siteTokens);
 
-		while(readLine()) {
-			switch (tokens.get(0)) {
-				case "(pinwire" :
-					for (XDLRCParserListener listener : listeners)
-						listener.enterPinWire(tokens);
-					for (XDLRCParserListener listener : listeners)
-						listener.exitPinWire(tokens);
-					break;
-				case ")" :
-					for (XDLRCParserListener listener : listeners)
-						listener.exitPrimitiveSite(siteTokens);
-					return;
+		//if (device.getSite(siteTokens.get(1)) == null)
+		//{
+			while(readLine()) {
+				switch (tokens.get(0)) {
+					case "(pinwire" :
+						for (XDLRCParserListener listener : listeners)
+							listener.enterPinWire(tokens);
+						for (XDLRCParserListener listener : listeners)
+							listener.exitPinWire(tokens);
+						break;
+					case ")" :
+						for (XDLRCParserListener listener : listeners)
+							listener.exitPrimitiveSite(siteTokens);
+						return;
+				}
 			}
-		}
-		throw new ParseException();
+			throw new ParseException();
+		//}
+
 	}
 
 	private void parseWire() throws IOException {

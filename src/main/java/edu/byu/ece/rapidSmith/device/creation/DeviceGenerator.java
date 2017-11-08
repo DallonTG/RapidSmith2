@@ -184,7 +184,25 @@ public final class DeviceGenerator {
 
 		// Create a template for each primitive type
 		for (PrimitiveDef def : device.getPrimitiveDefs()) {
-			Element ptEl = getSiteTypeEl(def.getType());
+			Element ptEl = null;
+					
+			// See if in family info xml
+			Element siteTypesEl = familyInfo.getRootElement().getChild("site_types");
+			for (Element siteTypeEl : siteTypesEl.getChildren("site_type")) {
+				if (siteTypeEl.getChild("name").getText().equals(def.getType().name()))
+				{
+					ptEl = siteTypeEl;
+					break;
+				}
+			}
+			
+			// if still null, not found
+			if (ptEl == null)
+			{
+				continue;
+			}
+			
+			//ptEl = getSiteTypeEl(def.getType());
 			
 			SiteTemplate template = new SiteTemplate();
 			template.setType(def.getType());
@@ -531,7 +549,7 @@ public final class DeviceGenerator {
 	}
 
 	/**
-	 * Searches the device info file for the primitive type element of the
+	 * Searches the family info file for the primitive type element of the
 	 * specified type.
 	 *
 	 * @param type the type of the element to retrieve
@@ -920,31 +938,61 @@ public final class DeviceGenerator {
 
 		@Override
 		protected void enterPrimitiveSite(List<String> tokens) {
-			Site site = new Site();
-			site.setTile(currTile);
-			site.setName(tokens.get(1));
-			site.parseCoordinatesFromName(tokens.get(1));
-			site.setIndex(tileSites.size());
-			site.setBondedType(BondedType.valueOf(tokens.get(3).toUpperCase()));
-
-			List<SiteType> alternatives = new ArrayList<>();
+			//System.out.println("Spot 1");
+			// Look at the type first
 			SiteType type = SiteType.valueOf(device.getFamily(), tokens.get(2));
-			alternatives.add(type);
+			
+			
+			// Search family info for the type
+			Element siteTypesEl = familyInfo.getRootElement().getChild("site_types");
+			for (Element siteTypeEl : siteTypesEl.getChildren("site_type")) {
+				if (siteTypeEl.getChild("name").getText().equals(type.name()))
+				{
+					Site site = new Site();
+					site.setTile(currTile);
+					site.setName(tokens.get(1));
+					site.parseCoordinatesFromName(tokens.get(1));
+					site.setIndex(tileSites.size());
+					site.setBondedType(BondedType.valueOf(tokens.get(3).toUpperCase()));
+					
+					//System.out.println("Tile: " + site.getTile().getName() + " Site: " + site.getName());
+					//System.out.println("  Tile has " + site.getTile().get() + " sites");
 
-			Element ptEl = getSiteTypeEl(type);
-			Element alternativesEl = ptEl.getChild("alternatives");
-			if (alternativesEl != null) {
-				FamilyType family = device.getFamily();
-				alternatives.addAll(alternativesEl.getChildren("alternative").stream()
-						.map(alternativeEl -> SiteType.valueOf(family, alternativeEl.getChildText("name")))
-						.collect(Collectors.toList()));
+					List<SiteType> alternatives = new ArrayList<>();
+					//SiteType type = SiteType.valueOf(device.getFamily(), tokens.get(2));
+					alternatives.add(type);
+
+					Element ptEl = getSiteTypeEl(type);
+					Element alternativesEl = ptEl.getChild("alternatives");
+					if (alternativesEl != null) {
+						FamilyType family = device.getFamily();
+						alternatives.addAll(alternativesEl.getChildren("alternative").stream()
+								.map(alternativeEl -> SiteType.valueOf(family, alternativeEl.getChildText("name")))
+								.collect(Collectors.toList()));
+					}
+
+					SiteType[] arr = alternatives.toArray(new SiteType[alternatives.size()]);
+					arr = alternativeTypesPool.add(new AlternativeTypes(arr)).types;
+					site.setPossibleTypes(arr);
+
+					tileSites.add(site);
+					return;
+				}
+					//return siteTypeEl;
+					// found
 			}
+			
+			// Site type not in family info xml
+			
+			// Log it
+			// Temp crap
+			System.out.println("Tile: " + currTile.getName() + " Site: " + tokens.get(1));
+			System.out.println("no site type " + type.name() + " in familyInfo.xml");
 
-			SiteType[] arr = alternatives.toArray(new SiteType[alternatives.size()]);
-			arr = alternativeTypesPool.add(new AlternativeTypes(arr)).types;
-			site.setPossibleTypes(arr);
-
-			tileSites.add(site);
+			// Don't add the site
+			
+			
+			
 		}
 
 		@Override
@@ -1066,16 +1114,34 @@ public final class DeviceGenerator {
 
 		@Override
 		protected void enterPrimitiveSite(List<String> tokens) {
-			currSite = device.getSite(tokens.get(1));
-			externalPinWires = new HashMap<>();
+			//System.out.println("Spot 2");
+			
+			if (device.getSite(tokens.get(1)) == null)
+			{
+				//System.out.println("Null site, don't do anything with it");
+				//currSite = null;
+			}
+			else
+			{
+				currSite = device.getSite(tokens.get(1));
+				externalPinWires = new HashMap<>();
+			}
+			
+
 		}
 
 		@Override
 		protected void enterPinWire(List<String> tokens) {
+			// if externalPinWires is null, the site is null
+			if (externalPinWires == null)
+				return;
+			
 			String name = tokens.get(1);
 			PinDirection direction =
 					tokens.get(2).equals("input") ? PinDirection.IN : PinDirection.OUT;
 			String externalWireName = stripTrailingParenthesis(tokens.get(3));
+			
+			
 			externalPinWires.put(name, we.getWireEnum(externalWireName));
 
 			if (direction == PinDirection.IN) {
@@ -1087,8 +1153,17 @@ public final class DeviceGenerator {
 
 		@Override
 		protected void exitPrimitiveSite(List<String> tokens) {
+			if (currSite == null || externalPinWires == null)
+			{
+				return;
+			}
+//				System.out.println("CURR SITE IS NULL");
+//			if (externalPinWires == null)
+//				System.out.println("PIN WIRE NULL");
+			
 			Map<SiteType, Map<String, Integer>> externalPinWiresMap =
 					new HashMap<>();
+
 			externalPinWiresMap.put(currSite.getPossibleTypes()[0], externalWiresPool.add(externalPinWires));
 
 			SiteType[] alternativeTypes = currSite.getPossibleTypes();
